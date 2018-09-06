@@ -1,73 +1,73 @@
 from tensorflow import keras
-from fire_module import FireModule
 
 
-class SqueezeNet(keras.Model):
+def fire_module(x, nb_filters, name):
+    (squeeze_nb_filters, expand_1x1_nb_filters, expand_3x3_nb_filters) = nb_filters
 
-    def __init__(self):
-        super(SqueezeNet, self).__init__(name='squeezenet')
+    squeeze = keras.layers.Conv2D(filters=squeeze_nb_filters,
+                                  kernel_size=1,
+                                  padding='same',
+                                  activation=keras.activations.relu,
+                                  name=name + '/squeeze')(x)
 
-        self.conv1 = keras.layers.Conv2D(filters=96,
-                                         kernel_size=7,
-                                         strides=2,
-                                         padding='same',
-                                         name='conv1')
+    expand_1x1 = keras.layers.Conv2D(filters=expand_1x1_nb_filters,
+                                     kernel_size=1,
+                                     padding='same',
+                                     activation=keras.activations.relu,
+                                     name=name + '/expand_1_1')(squeeze)
 
-        self.maxpool1 = keras.layers.MaxPooling2D(pool_size=3,
-                                                  strides=2,
-                                                  name='maxpool1')
+    expand_3x3 = keras.layers.Conv2D(filters=expand_3x3_nb_filters,
+                                     kernel_size=3,
+                                     padding='same',
+                                     activation=keras.activations.relu,
+                                     name=name + '/expand_3_3')(squeeze)
 
-        self.fire2 = FireModule((16, 64, 64), name='fire2')
-        self.fire3 = FireModule((16, 64, 64), name='fire3')
-        self.fire4 = FireModule((32, 128, 128), name='fire4')
+    return keras.layers.concatenate([expand_1x1, expand_3x3], axis=3, name=name + '/concat')
 
-        self.maxpool4 = keras.layers.MaxPooling2D(pool_size=3,
-                                                  strides=2,
-                                                  padding='same',
-                                                  name='maxpool4')
 
-        self.fire5 = FireModule((32, 128, 128), name='fire5')
-        self.fire6 = FireModule((48, 192, 192), name='fire6')
-        self.fire7 = FireModule((48, 192, 192), name='fire7')
-        self.fire8 = FireModule((64, 256, 256), name='fire8')
+def SqueezeNet(input_shape=None, classes=None):
 
-        self.maxpool8 = keras.layers.MaxPooling2D(pool_size=3,
-                                                  strides=2,
-                                                  name='maxpool8')
+    input_tensor = keras.layers.Input(shape=input_shape)
 
-        self.fire9 = FireModule((64, 256, 256), name='fire9')
+    x = keras.layers.Conv2D(filters=96,
+                            kernel_size=7,
+                            strides=2,
+                            padding='same',
+                            name='conv1')(input_tensor)
 
-        self.conv10 = keras.layers.Conv2D(filters=1000,
-                                          kernel_size=1,
-                                          strides=1,
-                                          padding='same',
-                                          name='conv10')
+    x = keras.layers.MaxPooling2D(pool_size=3,
+                                  strides=2,
+                                  name='maxpool1')(x)
 
-        self.avgpool10 = keras.layers.AveragePooling2D(13, strides=1)
+    x = fire_module(x, (16, 64, 64), name='fire2')
+    x = fire_module(x, (16, 64, 64), name='fire3')
+    x = fire_module(x, (32, 128, 128), name='fire4')
 
-    def call(self, inputs, training=False, **kwargs):
-        conv1 = self.conv1(inputs)
-        conv1 = self.maxpool1(conv1)
-        fire2 = self.fire2(conv1)
-        fire3 = self.fire3(fire2)
-        fire4 = self.fire4(fire3)
-        fire4 = self.maxpool4(fire4)
-        fire5 = self.fire5(fire4)
-        fire6 = self.fire6(fire5)
-        fire7 = self.fire7(fire6)
-        fire8 = self.fire8(fire7)
-        fire8 = self.maxpool8(fire8)
-        fire9 = self.fire9(fire8)
-        conv10 = self.conv10(fire9)
+    x = keras.layers.MaxPooling2D(pool_size=3,
+                                  strides=2,
+                                  padding='same',
+                                  name='maxpool4')(x)
 
-        return self.avgpool10(conv10)
+    x = fire_module(x, (32, 128, 128), name='fire5')
+    x = fire_module(x, (48, 192, 192), name='fire6')
+    x = fire_module(x, (48, 192, 192), name='fire7')
+    x = fire_module(x, (64, 256, 256), name='fire8')
 
-    def get_config(self):
-        pass
+    x = keras.layers.MaxPooling2D(pool_size=3,
+                                  strides=2,
+                                  name='maxpool8')(x)
 
-# input_layer = keras.layers.Input(shape=(224, 224, 3))
-# model = SqueezeNet()
-# # NOTE: Need to call the model to initialize the weights
-# # NOTE: so that we can see the summary
-# model(input_layer)
-# print(model.summary())
+    x = fire_module(x, (64, 256, 256), name='fire9')
+
+    x = keras.layers.Conv2D(filters=classes,
+                            kernel_size=1,
+                            strides=1,
+                            padding='same',
+                            name='conv10')(x)
+
+    x = keras.layers.AveragePooling2D(13, strides=1)(x)
+
+    model = keras.Model(input_tensor, x, name='squeezenet')
+
+    return model
+
