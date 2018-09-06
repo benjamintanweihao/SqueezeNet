@@ -33,3 +33,6 @@ class FireModule(keras.Model):
         expand_3x3 = self.expand_3x3(squeeze)
 
         return self.concat([expand_1x1, expand_3x3])
+
+    def get_config(self):
+        pass

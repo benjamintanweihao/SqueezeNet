@@ -62,10 +62,12 @@ class SqueezeNet(keras.Model):
 
         return self.avgpool10(conv10)
 
+    def get_config(self):
+        pass
 
-input_layer = keras.layers.Input(shape=(224, 224, 3))
-model = SqueezeNet()
-# NOTE: Need to call the model to initialize the weights
-# NOTE: so that we can see the summary
-model(input_layer)
-print(model.summary())
+# input_layer = keras.layers.Input(shape=(224, 224, 3))
+# model = SqueezeNet()
+# # NOTE: Need to call the model to initialize the weights
+# # NOTE: so that we can see the summary
+# model(input_layer)
+# print(model.summary())
