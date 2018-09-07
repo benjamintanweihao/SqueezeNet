@@ -11,7 +11,10 @@ train_images_path = os.path.join(os.getcwd(), 'data/fashionmnist/train-images-id
 train_labels = np.frombuffer(open(train_labels_path, 'rb').read(),
                              dtype=np.uint8, offset=8)
 train_images = np.frombuffer(open(train_images_path, 'rb').read(),
-                             dtype=np.uint8, offset=16).reshape(len(train_labels), 784)
+                             dtype=np.uint8, offset=16).reshape(len(train_labels), -1)
+train_images = np.dstack((train_images,) * 3)
+train_images = train_images.reshape(-1, 28, 28, 3)
+
 
 model = SqueezeNet(input_shape=(224, 224, 3), classes=10)
 model.compile(optimizer=tf.train.AdamOptimizer(0.001),
@@ -20,12 +23,19 @@ model.compile(optimizer=tf.train.AdamOptimizer(0.001),
 
 
 def train_input_fn(features, labels, batch_size):
+    def _parse_function(feature, label):
+        feature = tf.image.resize_images(feature, [224, 224])
+        return feature, label
+
     # 'input_1' comes from `print(model.input_names)`
-    train_dataset = tf.data.Dataset.from_tensor_slices(({'input_1': features}, labels))
+    train_dataset = tf.data.Dataset.from_tensor_slices((features, labels))
+    train_dataset = train_dataset.map(_parse_function)
     train_dataset = train_dataset.shuffle(1000).repeat().batch(batch_size)
 
     return train_dataset
 
 
 estimator = keras.estimator.model_to_estimator(keras_model=model)
-estimator.train(input_fn=lambda: train_input_fn(train_images, train_labels, batch_size=128), steps=2000)
+estimator.train(input_fn=lambda: train_input_fn(train_images,
+                                                train_labels,
+                                                batch_size=128), steps=2000)
