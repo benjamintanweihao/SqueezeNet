@@ -37,6 +37,7 @@ def SqueezeNet(input_shape=None, classes=None):
 
     x = keras.layers.MaxPooling2D(pool_size=3,
                                   strides=2,
+                                  padding='same',
                                   name='maxpool1')(x)
 
     x = fire_module(x, (16, 64, 64), name='fire2')
@@ -55,6 +56,7 @@ def SqueezeNet(input_shape=None, classes=None):
 
     x = keras.layers.MaxPooling2D(pool_size=3,
                                   strides=2,
+                                  padding='same',
                                   name='maxpool8')(x)
 
     x = fire_module(x, (64, 256, 256), name='fire9')
@@ -65,9 +67,10 @@ def SqueezeNet(input_shape=None, classes=None):
                             padding='same',
                             name='conv10')(x)
 
-    x = keras.layers.AveragePooling2D(13, strides=1)(x)
+    x = keras.layers.Dropout(0.5)(x)
 
-    model = keras.Model(input_tensor, x, name='squeezenet')
+    x = keras.layers.AveragePooling2D(pool_size=13)(x)
+    x = keras.layers.Flatten()(x)
+    x = keras.layers.Activation('softmax')(x)
 
-    return model
-
+    return keras.Model(input_tensor, x, name='squeezenet')
