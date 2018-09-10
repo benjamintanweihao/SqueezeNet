@@ -23,14 +23,18 @@ def fire_module(x, nb_squeeze_filters, nb_expand_filters, name):
     return keras.layers.concatenate([expand_1x1, expand_3x3], axis=3, name=name + '/concat')
 
 
-def SqueezeNet(input_shape=None, classes=None):
-    input_tensor = keras.layers.Input(shape=input_shape)
+def SqueezeNet(features, classes=None, training=True):
+    # TODO: Assert `features` is of the correct shape
+
+    input_layer = keras.layers.Input(tensor=features)
+    # NOTE: This is equivalent to:
+    # input_layer = tf.reshape(features, [-1, 227, 227, 3])
 
     x = keras.layers.Conv2D(filters=96,
                             kernel_size=7,
                             strides=2,
                             padding='same',
-                            name='conv1')(input_tensor)
+                            name='conv1')(input_layer)
 
     x = keras.layers.MaxPooling2D(pool_size=3,
                                   strides=2,
@@ -58,7 +62,7 @@ def SqueezeNet(input_shape=None, classes=None):
 
     x = fire_module(x, 64, 256, name='fire9')
 
-    x = keras.layers.Dropout(0.5)(x)
+    x = keras.layers.Dropout(0.5 if training else 0)(x)
 
     x = keras.layers.Conv2D(filters=classes,
                             kernel_size=1,
@@ -67,7 +71,5 @@ def SqueezeNet(input_shape=None, classes=None):
                             name='conv10')(x)
 
     x = keras.layers.AveragePooling2D(pool_size=13)(x)
-    x = keras.layers.Flatten()(x)
-    x = keras.layers.Activation('softmax')(x)
 
-    return keras.Model(input_tensor, x, name='squeezenet')
+    return x
