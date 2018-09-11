@@ -1,54 +1,13 @@
-import multiprocessing
 import os
-import numpy as np
 import tensorflow as tf
 from tensorflow import keras
+
+from input_pipeline import tiny_imagenet_input_fn
 
 tf.enable_eager_execution()
 tf.logging.set_verbosity(tf.logging.INFO)
 
 from squeezenet import SqueezeNet
-
-train_labels_path = os.path.join(os.getcwd(), 'data/fashionmnist/train-labels-idx1-ubyte')
-train_images_path = os.path.join(os.getcwd(), 'data/fashionmnist/train-images-idx3-ubyte')
-
-train_labels = np.frombuffer(open(train_labels_path, 'rb').read(),
-                             dtype=np.uint8, offset=8)
-train_images = np.frombuffer(open(train_images_path, 'rb').read(),
-                             dtype=np.uint8, offset=16).reshape(len(train_labels), -1)
-
-test_labels_path = os.path.join(os.getcwd(), 'data/fashionmnist/t10k-labels-idx1-ubyte')
-test_images_path = os.path.join(os.getcwd(), 'data/fashionmnist/t10k-images-idx3-ubyte')
-
-test_labels = np.frombuffer(open(test_labels_path, 'rb').read(),
-                            dtype=np.uint8, offset=8)
-test_images = np.frombuffer(open(test_images_path, 'rb').read(),
-                            dtype=np.uint8, offset=16).reshape(len(test_labels), -1)
-
-# Turn single channel into 3 channels
-train_images = np.dstack((train_images,) * 3)
-train_images = train_images.reshape(-1, 28, 28, 3)
-
-test_images = np.dstack((test_images,) * 3)
-test_images = test_images.reshape(-1, 28, 28, 3)
-
-
-def input_fn(features, labels, params, training=True):
-    def _parse_function(feature, label):
-        feature = tf.image.resize_images(feature / 255,
-                                         list(params['input_shape'])[:-1])  # [227, 227]
-
-        return feature, label
-
-    dataset = tf.data.Dataset.from_tensor_slices((features, labels))
-
-    if training:
-        dataset = dataset.shuffle(1000).repeat()
-
-    dataset = dataset.batch(params['batch_size'], drop_remainder=True) \
-        .map(_parse_function, num_parallel_calls=multiprocessing.cpu_count())
-
-    return dataset
 
 
 def model_fn(features, labels, mode, params):
@@ -91,11 +50,10 @@ def model_fn(features, labels, mode, params):
     # Create training op.
     assert mode == tf.estimator.ModeKeys.TRAIN
 
-    decay_steps = len(train_images) * params['n_epochs'] // params['batch_size']
-
     optimizer = None
     if params['optimizer'] == 'poly':
         # NOTE: Setting the learning rate to 0.04 gave `NanLossDuringTrainingError` as per the paper.
+        decay_steps = params['n_images'] * params['n_epochs'] // params['batch_size']
         learning_rate = tf.train.polynomial_decay(learning_rate=0.01,
                                                   global_step=tf.train.get_global_step(),
                                                   decay_steps=decay_steps,
@@ -117,34 +75,31 @@ def model_fn(features, labels, mode, params):
 
 
 params = {
+    'n_images': 10000,
     'n_classes': 10,
     'n_epochs': 15,
-    'batch_size': 128,
+    'batch_size': 64,
     'input_shape': (227, 227, 3),
     'optimizer': 'poly'  # rms | poly
 }
+
+# NOTE: steps = (no of ex / batch_size) * no_of_epochs
+steps = params['n_images'] // params['batch_size'] * params['n_epochs']
 
 estimator = tf.estimator.Estimator(
     model_fn=model_fn,
     model_dir=os.path.join(os.getcwd(), 'data', 'model'),
     params=params)
 
-# NOTE: steps = (no of ex / batch_size) * no_of_epochs
-STEPS = len(train_labels) // params['batch_size'] * params['n_epochs']
-
 tensors_to_log = {"probabilities": "softmax_tensor"}
 logging_hook = tf.train.LoggingTensorHook(tensors=tensors_to_log,
                                           every_n_iter=50)
 
-# Train the model
-estimator.train(input_fn=lambda: input_fn(train_images,
-                                          train_labels,
-                                          params=params),
-                steps=STEPS, hooks=[logging_hook])
+estimator.train(input_fn=lambda: tiny_imagenet_input_fn(params=params,
+                                                        mode=tf.estimator.ModeKeys.TRAIN),
+                steps=steps, hooks=[logging_hook])
 
-eval_result = estimator.evaluate(input_fn=lambda: input_fn(test_images,
-                                                           test_labels,
-                                                           params=params,
-                                                           training=False))
+eval_result = estimator.evaluate(input_fn=lambda: tiny_imagenet_input_fn(params=params,
+                                                                         mode=tf.estimator.ModeKeys.EVAL))
 
 print('\nTest set accuracy: {accuracy:0.3f}\n'.format(**eval_result))
