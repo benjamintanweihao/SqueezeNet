@@ -15,7 +15,7 @@ def model_fn(features, labels, mode, params):
                      classes=params['n_classes'],
                      training=(mode == tf.estimator.ModeKeys.TRAIN))
 
-    # logits.shape == (?, 10)
+    # logits.shape == (?, n_classes)
     logits = keras.layers.Flatten()(net)
 
     # Compute predictions
@@ -76,7 +76,7 @@ def model_fn(features, labels, mode, params):
 
 params = {
     'n_images': 10000,
-    'n_classes': 10,
+    'n_classes': 200, # Tiny ImageNet has 200 classes
     'n_epochs': 15,
     'batch_size': 64,
     'input_shape': (227, 227, 3),
@@ -90,6 +90,7 @@ estimator = tf.estimator.Estimator(
     model_fn=model_fn,
     model_dir=os.path.join(os.getcwd(), 'data', 'model'),
     params=params)
+
 
 tensors_to_log = {"probabilities": "softmax_tensor"}
 logging_hook = tf.train.LoggingTensorHook(tensors=tensors_to_log,

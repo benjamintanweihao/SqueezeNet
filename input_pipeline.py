@@ -1,8 +1,10 @@
 import multiprocessing
 import os
 import glob
-import re
+import tqdm
 import tensorflow as tf
+
+tf.logging.set_verbosity(tf.logging.INFO)
 
 
 def tiny_imagenet_input_fn(params, mode):
@@ -12,11 +14,13 @@ def tiny_imagenet_input_fn(params, mode):
         image_resized = tf.image.resize_images(image_decoded, list(params['input_shape'])[:-1])
         image_std = tf.image.per_image_standardization(image_resized)
 
-        label = tf.string_to_number(label, tf.uint8)
+        label = tf.string_to_number(label, tf.float32)
+        label = tf.cast(label, tf.uint8)
 
         return image_std, label
 
     filenames, labels = load_filenames_labels(mode)
+
     dataset = tf.data.Dataset.from_tensor_slices((filenames, labels))
     if mode == tf.estimator.ModeKeys.TRAIN:
         dataset = dataset.shuffle(1000).repeat()
@@ -58,8 +62,7 @@ def load_filenames_labels(mode):
     if mode == tf.estimator.ModeKeys.TRAIN:
         filenames = glob.glob(os.path.join(os.getcwd(), 'data/tiny-imagenet-200/train/*/images/*.JPEG'))
         for filename in filenames:
-            match = re.search(r'n\d+', filename)
-            label = str(label_dict[match.group()])
+            label = filename.split('/')[-1].split('_')[0]
             filenames.append(filename)
             labels.append(label)
 
