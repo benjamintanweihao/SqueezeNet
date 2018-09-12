@@ -75,12 +75,12 @@ def model_fn(features, labels, mode, params):
 
 
 params = {
-    'n_images': 10000,
+    'n_images': 100000,
     'n_classes': 200, # Tiny ImageNet has 200 classes
     'n_epochs': 15,
-    'batch_size': 64,
+    'batch_size': 256,
     'input_shape': (227, 227, 3),
-    'optimizer': 'poly'  # rms | poly
+    'optimizer': 'rms'  # rms | poly
 }
 
 # NOTE: steps = (no of ex / batch_size) * no_of_epochs
@@ -98,7 +98,7 @@ logging_hook = tf.train.LoggingTensorHook(tensors=tensors_to_log,
 
 estimator.train(input_fn=lambda: tiny_imagenet_input_fn(params=params,
                                                         mode=tf.estimator.ModeKeys.TRAIN),
-                steps=steps, hooks=[logging_hook])
+                steps=steps, hooks=[]) # hooks = [logging_hook]
 
 eval_result = estimator.evaluate(input_fn=lambda: tiny_imagenet_input_fn(params=params,
                                                                          mode=tf.estimator.ModeKeys.EVAL))
