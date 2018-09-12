@@ -65,7 +65,8 @@ def model_fn(features, labels, mode, params):
                                                momentum=0.9,
                                                use_nesterov=True)
     elif params['optimizer'] == 'rms':
-        optimizer = tf.train.RMSPropOptimizer(learning_rate=0.001)
+        optimizer = tf.train.RMSPropOptimizer(learning_rate=0.001,
+                                              momentum=0.9)
     else:
         assert 'No optimizer defined in params!'
 
@@ -76,15 +77,15 @@ def model_fn(features, labels, mode, params):
 
 params = {
     'n_images': 100000,
-    'n_classes': 200, # Tiny ImageNet has 200 classes
-    'n_epochs': 15,
+    'n_classes': 200,  # Tiny ImageNet has 200 classes
+    'n_epochs': 50,
     'batch_size': 256,
     'input_shape': (227, 227, 3),
-    'optimizer': 'rms'  # rms | poly
+    'optimizer': 'poly'  # rms | poly
 }
 
 # NOTE: steps = (no of ex / batch_size) * no_of_epochs
-steps = params['n_images'] // params['batch_size'] * params['n_epochs']
+steps = params['n_epochs'] * params['n_images'] // params['batch_size']
 
 estimator = tf.estimator.Estimator(
     model_fn=model_fn,
@@ -96,11 +97,13 @@ tensors_to_log = {"probabilities": "softmax_tensor"}
 logging_hook = tf.train.LoggingTensorHook(tensors=tensors_to_log,
                                           every_n_iter=50)
 
-estimator.train(input_fn=lambda: tiny_imagenet_input_fn(params=params,
-                                                        mode=tf.estimator.ModeKeys.TRAIN),
-                steps=steps, hooks=[]) # hooks = [logging_hook]
 
-eval_result = estimator.evaluate(input_fn=lambda: tiny_imagenet_input_fn(params=params,
-                                                                         mode=tf.estimator.ModeKeys.EVAL))
+train_spec = tf.estimator.TrainSpec(input_fn=lambda: tiny_imagenet_input_fn(params=params,
+                                                                            mode=tf.estimator.ModeKeys.TRAIN),
+                                    max_steps=steps)
 
-print('\nTest set accuracy: {accuracy:0.3f}\n'.format(**eval_result))
+eval_spec = tf.estimator.EvalSpec(input_fn=lambda: tiny_imagenet_input_fn(params=params,
+                                                                          mode=tf.estimator.ModeKeys.EVAL))
+
+
+tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)

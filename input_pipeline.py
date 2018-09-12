@@ -11,7 +11,7 @@ def tiny_imagenet_input_fn(params, mode):
         image_resized = tf.image.resize_images(image_decoded, list(params['input_shape'])[:-1])
         image_std = tf.image.per_image_standardization(image_resized)
 
-        label = tf.string_to_number(label, tf.float32)
+        label = tf.string_to_number(label, tf.int32)
         label = tf.cast(label, tf.uint8)
 
         return image_std, label
@@ -20,7 +20,7 @@ def tiny_imagenet_input_fn(params, mode):
 
     dataset = tf.data.Dataset.from_tensor_slices((filenames, labels))
     if mode == tf.estimator.ModeKeys.TRAIN:
-        dataset = dataset.shuffle(1000).repeat()
+        dataset = dataset.shuffle(10000).repeat()
 
     with tf.device('/cpu:0'):
         dataset = dataset \
