@@ -1,4 +1,5 @@
 from tensorflow import keras
+import tensorflow as tf
 
 
 def fire_module(x, nb_squeeze_filters, nb_expand_filters, name):
@@ -25,20 +26,16 @@ def fire_module(x, nb_squeeze_filters, nb_expand_filters, name):
 
 def SqueezeNet(features, classes=None, training=True):
     # TODO: Assert `features` is of the correct shape
-
-    input_layer = keras.layers.Input(tensor=features)
-    # NOTE: This is equivalent to:
-    # input_layer = tf.reshape(features, [-1, 227, 227, 3])
-
     x = keras.layers.Conv2D(filters=96,
                             kernel_size=7,
                             strides=2,
                             padding='same',
-                            name='conv1')(input_layer)
+                            activation=keras.activations.relu,
+                            name='conv1')(features)
 
     x = keras.layers.MaxPooling2D(pool_size=3,
                                   strides=2,
-                                  padding='same',
+                                  padding='valid',
                                   name='maxpool1')(x)
 
     x = fire_module(x, 16, 64, name='fire2')
@@ -62,14 +59,22 @@ def SqueezeNet(features, classes=None, training=True):
 
     x = fire_module(x, 64, 256, name='fire9')
 
-    x = keras.layers.Dropout(0.5 if training else 0)(x)
+    x = keras.layers.Dropout(0.5 if training else 0.0)(x)
 
     x = keras.layers.Conv2D(filters=classes,
                             kernel_size=1,
                             strides=1,
                             padding='same',
+                            activation=keras.activations.relu,
                             name='conv10')(x)
 
-    x = keras.layers.AveragePooling2D(pool_size=13)(x)
+    # TODO: Implementation says Average Pooling, but the resulting shape would be wrong...
+    # x = keras.layers.AveragePooling2D(pool_size=13, strides=1)(x)
+    # # TODO: Use squeeze?
+    # # logits = keras.layers.Flatten()(x)
+    # logits = tf.squeeze(x, axis=[2])
+    logits = keras.layers.GlobalAveragePooling2D()(x)
 
-    return x
+    logits = tf.Print(logits, [tf.argmax(logits, axis=1)])
+
+    return logits

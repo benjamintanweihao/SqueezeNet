@@ -5,16 +5,18 @@ import tensorflow as tf
 
 
 def tiny_imagenet_input_fn(params, mode):
+    imagenet_mean = tf.constant([123.68, 116.779, 103.939], dtype=tf.float32)
+
     def _parse_function(filename, label):
         image_string = tf.read_file(filename)
-        image_decoded = tf.image.decode_jpeg(image_string, channels=3)
-        image_resized = tf.image.resize_images(image_decoded, list(params['input_shape'])[:-1])
-        image_std = tf.image.per_image_standardization(image_resized)
+        image = tf.image.decode_jpeg(image_string, channels=3)
+        image = tf.image.resize_images(image, list(params['input_shape'])[:-1])
+        image = tf.subtract(image, imagenet_mean)
 
         label = tf.string_to_number(label, tf.int32)
-        label = tf.cast(label, tf.uint8)
+        one_hot = tf.one_hot(label, depth=params['n_classes'])
 
-        return image_std, label
+        return image, one_hot
 
     filenames, labels = load_filenames_labels(mode)
 

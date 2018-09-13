@@ -1,22 +1,18 @@
 import os
 import tensorflow as tf
-from tensorflow import keras
-
-from input_pipeline import tiny_imagenet_input_fn
 
 tf.enable_eager_execution()
 tf.logging.set_verbosity(tf.logging.INFO)
 
+from input_pipeline import tiny_imagenet_input_fn
 from squeezenet import SqueezeNet
 
 
 def model_fn(features, labels, mode, params):
-    net = SqueezeNet(features,
-                     classes=params['n_classes'],
-                     training=(mode == tf.estimator.ModeKeys.TRAIN))
-
     # logits.shape == (?, n_classes)
-    logits = keras.layers.Flatten()(net)
+    logits = SqueezeNet(features,
+                        classes=params['n_classes'],
+                        training=(mode == tf.estimator.ModeKeys.TRAIN))
 
     # Compute predictions
     predictions = {
@@ -27,15 +23,17 @@ def model_fn(features, labels, mode, params):
     if mode == tf.estimator.ModeKeys.PREDICT:
         return tf.estimator.EstimatorSpec(mode, predictions=predictions)
 
-    # Compute loss.
-    onehot_labels = tf.one_hot(indices=tf.cast(labels, tf.int32),
-                               depth=params['n_classes'])
+    # NOTE: Useful for debugging!
+    # labels = tf.Print(labels, [tf.argmax(labels, 1)], summarize=params['n_classes'])
+    # logits = tf.Print(logits, [tf.argmax(logits, 1)], summarize=params['n_classes'])
 
-    loss = tf.losses.softmax_cross_entropy(onehot_labels=onehot_labels,
-                                           logits=logits)
+    # Compute loss.
+    # See https://stats.stackexchange.com/questions/306862/cross-entropy-versus-mean-of-cross-entropy
+    loss = tf.reduce_mean(tf.losses.softmax_cross_entropy(onehot_labels=labels,
+                                                          logits=logits))
 
     # Compute evaluation metrics.
-    accuracy = tf.metrics.accuracy(labels=labels,
+    accuracy = tf.metrics.accuracy(labels=tf.argmax(labels, axis=1),
                                    predictions=predictions['classes'],
                                    name='acc_op')
 
@@ -67,6 +65,9 @@ def model_fn(features, labels, mode, params):
     elif params['optimizer'] == 'rms':
         optimizer = tf.train.RMSPropOptimizer(learning_rate=0.001,
                                               momentum=0.9)
+    elif params['optimizer'] == 'sgd':
+        optimizer = tf.train.MomentumOptimizer(learning_rate=0.01, momentum=0.9, use_nesterov=True)
+        # optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.01)
     else:
         assert 'No optimizer defined in params!'
 
@@ -77,15 +78,18 @@ def model_fn(features, labels, mode, params):
 
 params = {
     'n_images': 100000,
+    'n_val_images': 10000,
     'n_classes': 200,  # Tiny ImageNet has 200 classes
     'n_epochs': 50,
     'batch_size': 256,
     'input_shape': (227, 227, 3),
-    'optimizer': 'poly'  # rms | poly
+    'optimizer': 'sgd'  # rms | poly | sgd
 }
 
 # NOTE: steps = (no of ex / batch_size) * no_of_epochs
 steps = params['n_epochs'] * params['n_images'] // params['batch_size']
+
+print('Steps: {}'.format(steps))
 
 estimator = tf.estimator.Estimator(
     model_fn=model_fn,
@@ -98,12 +102,14 @@ logging_hook = tf.train.LoggingTensorHook(tensors=tensors_to_log,
                                           every_n_iter=50)
 
 
-train_spec = tf.estimator.TrainSpec(input_fn=lambda: tiny_imagenet_input_fn(params=params,
-                                                                            mode=tf.estimator.ModeKeys.TRAIN),
-                                    max_steps=steps)
+train_spec = tf.estimator.TrainSpec(
+    input_fn=lambda: tiny_imagenet_input_fn(params=params,
+                                            mode=tf.estimator.ModeKeys.TRAIN),
+    max_steps=steps)
 
-eval_spec = tf.estimator.EvalSpec(input_fn=lambda: tiny_imagenet_input_fn(params=params,
-                                                                          mode=tf.estimator.ModeKeys.EVAL))
-
+eval_spec = tf.estimator.EvalSpec(
+    input_fn=lambda: tiny_imagenet_input_fn(params=params,
+                                            mode=tf.estimator.ModeKeys.EVAL),
+    steps=params['n_val_images'] // params['batch_size'])
 
 tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
