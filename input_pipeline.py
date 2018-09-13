@@ -20,11 +20,14 @@ def tiny_imagenet_input_fn(params, mode):
 
     filenames, labels = load_filenames_labels(mode)
 
-    # TODO: Sanity check: Limit to 100 files and see if it quickly overfits
-    dataset = tf.data.Dataset.from_tensor_slices((filenames[0:10000], labels[0:10000]))
-    dataset = tf.data.Dataset.from_tensor_slices((filenames[0:10000], labels[0:10000]))
+    dataset = tf.data.Dataset.from_tensor_slices((filenames, labels))
     if mode == tf.estimator.ModeKeys.TRAIN:
-        dataset = dataset.shuffle(10000).repeat()
+        # NOTE: Pass in a small number to .take() as a sanity check to see
+        #       if the network overfits.
+        dataset = dataset\
+            .shuffle(10000)\
+            .take(params['n_images'])\
+            .repeat()
 
     with tf.device('/cpu:0'):
         dataset = dataset \

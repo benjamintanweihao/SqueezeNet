@@ -23,15 +23,12 @@ def model_fn(features, labels, mode, params):
     if mode == tf.estimator.ModeKeys.PREDICT:
         return tf.estimator.EstimatorSpec(mode, predictions=predictions)
 
-    # NOTE: Useful for debugging!
-    # labels = tf.Print(labels, [tf.argmax(labels, 1)], summarize=params['n_classes'])
-    # logits = tf.Print(logits, [tf.argmax(logits, 1)], summarize=params['n_classes'])
-
     # Compute loss.
     # See https://stats.stackexchange.com/questions/306862/cross-entropy-versus-mean-of-cross-entropy
     loss = tf.reduce_mean(tf.losses.softmax_cross_entropy(onehot_labels=labels,
                                                           logits=logits))
 
+    # NOTE: Useful for debugging!
     loss = tf.Print(loss, [loss])
     # Compute evaluation metrics.
     accuracy = tf.metrics.accuracy(labels=tf.argmax(labels, axis=1),
@@ -67,8 +64,9 @@ def model_fn(features, labels, mode, params):
         optimizer = tf.train.RMSPropOptimizer(learning_rate=0.001,
                                               momentum=0.9)
     elif params['optimizer'] == 'sgd':
-        optimizer = tf.train.MomentumOptimizer(learning_rate=0.001, momentum=0.9, use_nesterov=False)
-        # optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.01)
+        optimizer = tf.train.MomentumOptimizer(learning_rate=0.001,
+                                               momentum=0.9,
+                                               use_nesterov=False)
     else:
         assert 'No optimizer defined in params!'
 
@@ -81,8 +79,8 @@ params = {
     'n_images': 100000,
     'n_val_images': 10000,
     'n_classes': 200,  # Tiny ImageNet has 200 classes
-    'n_epochs': 50,
-    'batch_size': 256,
+    'n_epochs': 80,
+    'batch_size': 128,
     'input_shape': (227, 227, 3),
     'optimizer': 'sgd'  # rms | poly | sgd
 }
