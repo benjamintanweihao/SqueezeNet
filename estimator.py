@@ -32,6 +32,7 @@ def model_fn(features, labels, mode, params):
     loss = tf.reduce_mean(tf.losses.softmax_cross_entropy(onehot_labels=labels,
                                                           logits=logits))
 
+    loss = tf.Print(loss, [loss])
     # Compute evaluation metrics.
     accuracy = tf.metrics.accuracy(labels=tf.argmax(labels, axis=1),
                                    predictions=predictions['classes'],
@@ -66,7 +67,7 @@ def model_fn(features, labels, mode, params):
         optimizer = tf.train.RMSPropOptimizer(learning_rate=0.001,
                                               momentum=0.9)
     elif params['optimizer'] == 'sgd':
-        optimizer = tf.train.MomentumOptimizer(learning_rate=0.01, momentum=0.9, use_nesterov=True)
+        optimizer = tf.train.MomentumOptimizer(learning_rate=0.001, momentum=0.9, use_nesterov=False)
         # optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.01)
     else:
         assert 'No optimizer defined in params!'
