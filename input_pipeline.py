@@ -2,6 +2,7 @@ import multiprocessing
 import os
 from imutils import paths
 import tensorflow as tf
+import random
 
 
 def tiny_imagenet_input_fn(params, mode):
@@ -12,28 +13,39 @@ def tiny_imagenet_input_fn(params, mode):
         image = tf.image.decode_jpeg(image_string, channels=3)
         image = tf.image.resize_images(image, list(params['input_shape'])[:-1])
         image = tf.subtract(image, imagenet_mean)
+        image = tf.image.per_image_standardization(image)
 
         label = tf.string_to_number(label, tf.int32)
-        one_hot = tf.one_hot(label, depth=params['n_classes'])
+        one_hot = tf.one_hot(label, depth=params['n_classes'], dtype=tf.int32)
 
         return image, one_hot
 
-    filenames, labels = load_filenames_labels(mode)
+    split_idx = int(params['n_images'] * 0.8)
+
+    filenames, labels = load_filenames_labels() # TRAIN + EVAL
+    combined = list(zip(filenames, labels))
+    random.shuffle(combined)
+
+    filenames, labels = zip(*combined)
+    train_filenames = filenames[]
+
 
     dataset = tf.data.Dataset.from_tensor_slices((filenames, labels))
     if mode == tf.estimator.ModeKeys.TRAIN:
         # NOTE: Pass in a small number to .take() as a sanity check to see
         #       if the network overfits.
-        dataset = dataset\
-            .shuffle(10000)\
-            .take(params['n_images'])\
+        dataset = dataset \
+            .shuffle(10000, seed=123456789) \
             .repeat()
 
-    with tf.device('/cpu:0'):
+    if mode == tf.estimator.ModeKeys.EVAL:
         dataset = dataset \
-            .map(_parse_function, num_parallel_calls=multiprocessing.cpu_count()) \
-            .batch(params['batch_size'], drop_remainder=True) \
-            .prefetch(1)
+            .repeat()
+
+    dataset = dataset \
+        .map(_parse_function, num_parallel_calls=multiprocessing.cpu_count()) \
+        .batch(params['batch_size'], drop_remainder=True) \
+        .prefetch(1)
 
     return dataset
 
@@ -59,25 +71,25 @@ def build_label_dicts():
     return label_dict, class_description
 
 
-def load_filenames_labels(mode):
+def load_filenames_labels():
     label_dict, class_description = build_label_dicts()
     filenames, labels = [], []
 
-    if mode == tf.estimator.ModeKeys.TRAIN:
-        for filename in list(paths.list_images(os.path.join(os.getcwd(), 'data/tiny-imagenet-200/train'))):
-            label = filename.split('/')[-1].split('_')[0]
-            label = str(label_dict[label])
-            filenames.append(filename)
-            labels.append(label)
+    # if mode == tf.estimator.ModeKeys.TRAIN:
+    for filename in list(paths.list_images(os.path.join(os.getcwd(), 'data/tiny-imagenet-200/train'))):
+        label = filename.split('/')[-1].split('_')[0]
+        label = str(label_dict[label])
+        filenames.append(filename)
+        labels.append(label)
 
-    elif mode == tf.estimator.ModeKeys.EVAL:
-        with open(os.path.join(os.getcwd(), 'data/tiny-imagenet-200/val/val_annotations.txt'), 'r') as f:
-            for line in f.readlines():
-                split_line = line.split('\t')
-                filename = os.path.join(os.getcwd(), 'data/tiny-imagenet-200/val/images/' + split_line[0])
-                label = str(label_dict[split_line[1]])
-                filenames.append(filename)
-                labels.append(label)
+    # elif mode == tf.estimator.ModeKeys.EVAL:
+    #     with open(os.path.join(os.getcwd(), 'data/tiny-imagenet-200/val/val_annotations.txt'), 'r') as f:
+    #         for line in f.readlines():
+    #             split_line = line.split('\t')
+    #             filename = os.path.join(os.getcwd(), 'data/tiny-imagenet-200/val/images/' + split_line[0])
+    #             label = str(label_dict[split_line[1]])
+    #             filenames.append(filename)
+    #             labels.append(label)
 
     assert len(filenames) == len(labels)
     assert len(filenames) > 0

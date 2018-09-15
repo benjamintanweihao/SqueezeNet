@@ -5,41 +5,38 @@ import tensorflow as tf
 def fire_module(x, nb_squeeze_filters, nb_expand_filters, name):
     squeeze = keras.layers.Conv2D(filters=nb_squeeze_filters,
                                   kernel_size=1,
-                                  # kernel_initializer=keras.initializers.VarianceScaling(1.0),
+                                  kernel_initializer=keras.initializers.VarianceScaling(1.0),
                                   padding='same',
-                                  activation=keras.activations.relu,
+                                  activation=keras.activations.elu,
                                   name=name + '/squeeze')(x)
 
     expand_1x1 = keras.layers.Conv2D(filters=nb_expand_filters,
                                      kernel_size=1,
-                                     # kernel_initializer=keras.initializers.VarianceScaling(1.0),
+                                     kernel_initializer=keras.initializers.VarianceScaling(1.0),
                                      padding='same',
-                                     activation=keras.activations.relu,
+                                     activation=keras.activations.elu,
                                      name=name + '/e1x1')(squeeze)
 
     expand_3x3 = keras.layers.Conv2D(filters=nb_expand_filters,
                                      kernel_size=3,
                                      padding='same',
-                                     # kernel_initializer=keras.initializers.VarianceScaling(1.0),
-                                     activation=keras.activations.relu,
+                                     kernel_initializer=keras.initializers.VarianceScaling(1.0),
+                                     activation=keras.activations.elu,
                                      name=name + '/e3x3')(squeeze)
 
-    return keras.layers.Concatenate(name='concat', axis=3)([expand_1x1, expand_3x3])
-
-    # return keras.layers.concatenate([expand_1x1, expand_3x3], axis=3, name=name + '/concat')
+    return keras.layers.Concatenate(name=name + '/concat', axis=3)([expand_1x1, expand_3x3])
 
 
 def SqueezeNet(features, classes=None, training=True):
-    # TODO: Assert `features` is of the correct shape
-    x = keras.layers.Conv2D(filters=96,
+    x = keras.layers.Conv2D(filters=64,
                             kernel_size=7,
                             strides=2,
-                            # kernel_initializer=keras.initializers.VarianceScaling(1.0),
+                            kernel_initializer=keras.initializers.VarianceScaling(1.0),
                             padding='same',
-                            activation=keras.activations.relu,
+                            activation=keras.activations.elu,
                             name='conv1')(features)
 
-    x = keras.layers.MaxPooling2D(pool_size=3,
+    x = keras.layers.MaxPooling2D(pool_size=2,
                                   strides=2,
                                   padding='valid',
                                   name='maxpool1')(x)
@@ -48,7 +45,7 @@ def SqueezeNet(features, classes=None, training=True):
     x = fire_module(x, 16, 64, name='fire3')
     x = fire_module(x, 32, 128, name='fire4')
 
-    x = keras.layers.MaxPooling2D(pool_size=3,
+    x = keras.layers.MaxPooling2D(pool_size=2,
                                   strides=2,
                                   padding='same',
                                   name='maxpool4')(x)
@@ -58,7 +55,7 @@ def SqueezeNet(features, classes=None, training=True):
     x = fire_module(x, 48, 192, name='fire7')
     x = fire_module(x, 64, 256, name='fire8')
 
-    x = keras.layers.MaxPooling2D(pool_size=3,
+    x = keras.layers.MaxPooling2D(pool_size=2,
                                   strides=2,
                                   padding='same',
                                   name='maxpool8')(x)
@@ -71,8 +68,8 @@ def SqueezeNet(features, classes=None, training=True):
                             kernel_size=1,
                             strides=1,
                             padding='same',
-                            # kernel_initializer=keras.initializers.VarianceScaling(1.0),
-                            activation=keras.activations.relu,
+                            kernel_initializer=keras.initializers.VarianceScaling(1.0),
+                            activation=keras.activations.elu,
                             name='conv10')(x)
 
     # TODO: Implementation says Average Pooling, but the resulting shape would be wrong...
@@ -81,5 +78,7 @@ def SqueezeNet(features, classes=None, training=True):
     # logits = keras.layers.Flatten()(x)
     # logits = tf.squeeze(x, axis=[2])
     logits = keras.layers.GlobalAveragePooling2D()(x)
+    # logits = tf.reduce_mean(x, axis=[1, 2])
+    # logits = keras.layers.Flatten()(x)
 
     return logits

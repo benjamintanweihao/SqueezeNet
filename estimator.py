@@ -29,7 +29,9 @@ def model_fn(features, labels, mode, params):
                                                           logits=logits))
 
     # NOTE: Useful for debugging!
-    loss = tf.Print(loss, [loss])
+    loss = tf.Print(loss, [loss, tf.argmax(tf.nn.softmax(logits), axis=1)],
+                    message='[Loss|Logits]',
+                    summarize=1 + params['batch_size'] * 3)
     # Compute evaluation metrics.
     accuracy = tf.metrics.accuracy(labels=tf.argmax(labels, axis=1),
                                    predictions=predictions['classes'],
@@ -59,7 +61,7 @@ def model_fn(features, labels, mode, params):
 
         optimizer = tf.train.MomentumOptimizer(learning_rate=learning_rate,
                                                momentum=0.9,
-                                               use_nesterov=True)
+                                               use_nesterov=False)
     elif params['optimizer'] == 'rms':
         optimizer = tf.train.RMSPropOptimizer(learning_rate=0.001,
                                               momentum=0.9)
@@ -79,9 +81,9 @@ params = {
     'n_images': 100000,
     'n_val_images': 10000,
     'n_classes': 200,  # Tiny ImageNet has 200 classes
-    'n_epochs': 80,
-    'batch_size': 128,
-    'input_shape': (227, 227, 3),
+    'n_epochs': 100,
+    'batch_size': 32,
+    'input_shape': (64, 64, 3),
     'optimizer': 'sgd'  # rms | poly | sgd
 }
 
@@ -95,11 +97,9 @@ estimator = tf.estimator.Estimator(
     model_dir=os.path.join(os.getcwd(), 'data', 'model'),
     params=params)
 
-
 tensors_to_log = {"probabilities": "softmax_tensor"}
 logging_hook = tf.train.LoggingTensorHook(tensors=tensors_to_log,
                                           every_n_iter=50)
-
 
 train_spec = tf.estimator.TrainSpec(
     input_fn=lambda: tiny_imagenet_input_fn(params=params,
@@ -109,6 +109,8 @@ train_spec = tf.estimator.TrainSpec(
 eval_spec = tf.estimator.EvalSpec(
     input_fn=lambda: tiny_imagenet_input_fn(params=params,
                                             mode=tf.estimator.ModeKeys.EVAL),
-    steps=params['n_val_images'] // params['batch_size'])
+    steps=100,
+    start_delay_secs=60, # start evaluating every 60 seconds
+    throttle_secs=120)
 
 tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
