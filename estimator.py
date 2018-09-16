@@ -85,7 +85,7 @@ params = {
     'n_epochs': 100,
     'batch_size': 64,
     'input_shape': (64, 64, 3),
-    'optimizer': 'adam'  # rms | poly | sgd | adam
+    'optimizer': 'sgd'  # rms | poly | sgd | adam
 }
 
 # NOTE: steps = (no of ex / batch_size) * no_of_epochs
