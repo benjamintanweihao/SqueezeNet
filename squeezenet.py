@@ -1,31 +1,20 @@
+import tensorflow as tf
 from tensorflow import keras
-import random
 
 
-def SqueezeNet(features, classes=None, training=True, pool_size=3, include_bn=True, activation='relu'):
-    x = keras.layers.Conv2D(filters=32,
-                            kernel_size=7,
-                            strides=2,
-                            kernel_initializer=keras.initializers.he_normal(random.randint(0, 1000)),
-                            padding='same',
-                            activation=activation,
-                            name='conv1')(features)
+def SqueezeNet(features, classes=None, training=True, activation=tf.nn.relu):
+    x = conv_2d(features, 96, 7, 2, activation, 'conv1')
 
-    if include_bn:
-        x = keras.layers.BatchNormalization(name='conv1_bn')(x)
-
-    x = keras.layers.MaxPooling2D(pool_size=pool_size,
-                                  strides=1,
-                                  padding='valid',
+    x = keras.layers.MaxPooling2D(pool_size=[3, 3],
+                                  strides=[2, 2],
                                   name='maxpool1')(x)
 
     x = fire_module(x, 16, 64, name='fire2', activation=activation)
     x = fire_module(x, 16, 64, name='fire3', activation=activation)
     x = fire_module(x, 32, 128, name='fire4', activation=activation)
 
-    x = keras.layers.MaxPooling2D(pool_size=pool_size,
-                                  strides=1,
-                                  padding='same',
+    x = keras.layers.MaxPooling2D(pool_size=[3, 3],
+                                  strides=[2, 2],
                                   name='maxpool4')(x)
 
     x = fire_module(x, 32, 128, name='fire5', activation=activation)
@@ -33,54 +22,40 @@ def SqueezeNet(features, classes=None, training=True, pool_size=3, include_bn=Tr
     x = fire_module(x, 48, 192, name='fire7', activation=activation)
     x = fire_module(x, 64, 256, name='fire8', activation=activation)
 
-    x = keras.layers.MaxPooling2D(pool_size=pool_size,
-                                  strides=1,
-                                  padding='same',
+    x = keras.layers.MaxPooling2D(pool_size=[3, 3],
+                                  strides=[2, 2],
                                   name='maxpool8')(x)
 
     x = fire_module(x, 64, 256, name='fire9', activation=activation)
 
     x = keras.layers.Dropout(0.5 if training else 0.0)(x)
 
-    x = keras.layers.Conv2D(filters=classes,
-                            kernel_size=1,
-                            strides=1,
-                            padding='same',
-                            kernel_initializer=keras.initializers.he_normal(random.randint(0, 1000)),
-                            activation=activation,
-                            name='conv10')(x)
+    x = conv_2d(x, classes, 1, 1, activation, 'conv10')
 
-    if include_bn:
-        x = keras.layers.BatchNormalization(name='conv10_bn')(x)
-
-    logits = keras.layers.GlobalAveragePooling2D()(x)
+    # NOTE: Had a lot of trouble with this all because MaxPool was set to 'same'
+    # NOTE: instead of 'valid'.
+    x = tf.layers.average_pooling2d(x, pool_size=[13, 13], strides=[1, 1])
+    logits = tf.layers.flatten(x)
 
     return logits
 
 
+def conv_2d(inputs, filters, kernel_size, strides, activation, name):
+    return keras.layers.Conv2D(filters=filters,
+                               kernel_size=[kernel_size, kernel_size],
+                               strides=[strides, strides],
+                               padding='same',
+                               kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(),
+                               # bias_initializer=tf.zeros_initializer(),
+                               kernel_regularizer=tf.contrib.layers.l2_regularizer(scale=0.0002),
+                               trainable=True,
+                               activation=activation,
+                               name=name)(inputs)
+
+
 def fire_module(x, nb_squeeze_filters, nb_expand_filters, name, activation):
-    squeeze = keras.layers.Conv2D(filters=nb_squeeze_filters,
-                                  kernel_size=1,
-                                  kernel_initializer=keras.initializers.he_normal(random.randint(0, 1000)),
-                                  padding='same',
-                                  activation=activation,
-                                  name=name + '/squeeze')(x)
-
-    squeeze = keras.layers.BatchNormalization(name=name + '_bn')(squeeze)
-
-    expand_1x1 = keras.layers.Conv2D(filters=nb_expand_filters,
-                                     kernel_size=1,
-                                     kernel_initializer=keras.initializers.he_normal(random.randint(0, 1000)),
-                                     padding='same',
-                                     activation=activation,
-                                     name=name + '/e1x1')(squeeze)
-
-    expand_3x3 = keras.layers.Conv2D(filters=nb_expand_filters,
-                                     kernel_size=3,
-                                     padding='same',
-                                     kernel_initializer=keras.initializers.he_normal(random.randint(0, 1000)),
-                                     activation=activation,
-                                     name=name + '/e3x3')(squeeze)
+    squeeze = conv_2d(x, nb_squeeze_filters, 1, 1, activation, name + '/squeeze')
+    expand_1x1 = conv_2d(squeeze, nb_expand_filters, 1, 1, activation, name + '/e1x1')
+    expand_3x3 = conv_2d(squeeze, nb_expand_filters, 3, 1, activation, name + '/e3x3')
 
     return keras.layers.Concatenate(name=name + '/concat', axis=3)([expand_1x1, expand_3x3])
-
