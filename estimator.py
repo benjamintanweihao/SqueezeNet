@@ -30,17 +30,6 @@ def str2bool(v):
 # ap.add_argument('--exp_name', help="Experiment name", required=True)
 
 # args = vars(ap.parse_args())
-# args['input_shape'] = (64, 64, 3) # Tiny ImageNet
-# args['input_shape'] = (227, 227, 3)
-
-args = {'input_shape': (227, 227, 3),
-        'n_classes': 256,
-        'n_epochs': 50,
-        'batch_size': 64,
-        'lr': 0.0004,
-        'optimizer': 'adam',
-        'activation': tf.nn.elu,
-        'exp_name': 'exp123'}
 
 X, y = caltech_256.load_filenames_and_labels()
 X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2)
@@ -48,6 +37,16 @@ X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2)
 assert len(X_train) == len(y_train)
 assert len(X_val) == len(y_val)
 
+args = {'input_shape': (224, 224, 3),
+        'n_classes': 256,
+        'n_epochs': 100,
+        'batch_size': 128,
+        'lr': 0.0005,
+        'optimizer': 'adam',
+        'activation': tf.nn.elu,
+        'n_images': len(X_train),
+        'n_val_images': len(X_val),
+        'exp_name': 'exp123'}
 
 def model_fn(features, labels, mode, params):
     assert params['n_classes'] > 0
@@ -79,13 +78,17 @@ def model_fn(features, labels, mode, params):
     loss = tf.Print(loss, [loss, tf.argmax(tf.nn.softmax(logits), axis=1)],
                     message='[Loss|Logits]',
                     summarize=1 + params['batch_size'] * 3)
+
     # Compute evaluation metrics.
+    accuracy = tf.metrics.accuracy(labels, predictions, name='accuracy_1')
 
     metrics = {
-        "accuracy": tf.metrics.accuracy(labels, predictions),
+        "accuracy": accuracy,
         "recall_at_5": tf.metrics.recall_at_k(labels, logits, 5),
         "recall_at_1": tf.metrics.recall_at_k(labels, logits, 1)
     }
+
+    tf.summary.scalar('accuracy', accuracy[1])
 
     if mode == tf.estimator.ModeKeys.EVAL:
         return tf.estimator.EstimatorSpec(mode,
@@ -132,37 +135,19 @@ assert steps > 0
 
 print('Steps: {}'.format(steps))
 
-run_config = tf.estimator.RunConfig(save_checkpoints_steps=500)
+run_config = tf.estimator.RunConfig(save_checkpoints_steps=100)
 
-timestamp = '-{:%Y-%m-%d-%H:%M:%S}'.format(datetime.datetime.now())
-exp_name = args['exp_name'].lower().replace(' ', '_') + timestamp
+# timestamp = '-{:%Y-%m-%d-%H:%M:%S}'.format(datetime.datetime.now())
+# exp_name = args['exp_name'].lower().replace(' ', '_') + timestamp
 
-args['n_images'] = len(X_train)
-args['n_val_images'] = len(X_val)
 
 estimator = tf.estimator.Estimator(
     model_fn=model_fn,
-    model_dir=os.path.join(os.getcwd(), 'data', 'model', exp_name),
+    model_dir=os.path.join(os.getcwd(), 'data', 'model'),
+    # model_dir=os.path.join(os.getcwd(), 'data', 'model', exp_name),
     params=args,
     config=run_config)
 
-tensors_to_log = {"probabilities": "softmax_tensor"}
-logging_hook = tf.train.LoggingTensorHook(tensors=tensors_to_log,
-                                          every_n_iter=50)
-
-# train_spec = tf.estimator.TrainSpec(
-#     input_fn=lambda: tiny_imagenet.input_fn(params=args,
-#                                             mode=tf.estimator.ModeKeys.TRAIN),
-#     max_steps=steps)
-#
-# # Evaluation happens after a checkpoint is created.
-# # See: https://www.tensorflow.org/guide/checkpoints#checkpointing_frequency
-# eval_spec = tf.estimator.EvalSpec(
-#     input_fn=lambda: tiny_imagenet.input_fn(params=args,
-#                                             mode=tf.estimator.ModeKeys.EVAL),
-#     steps=args['n_val_images'] // args['batch_size'],
-#     start_delay_secs=0,  # start evaluating every 60 seconds
-#     throttle_secs=0)
 
 train_spec = tf.estimator.TrainSpec(
     input_fn=lambda: caltech_256.input_fn(X_train,
@@ -177,7 +162,7 @@ eval_spec = tf.estimator.EvalSpec(
                                           params=args,
                                           mode=tf.estimator.ModeKeys.EVAL),
     steps=len(X_val) // args['batch_size'],
-    start_delay_secs=0,  # start evaluating every 60 seconds
-    throttle_secs=0)
+    start_delay_secs=30,  # start evaluating every 30 seconds
+    throttle_secs=0, hooks=[])
 
 tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
