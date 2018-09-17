@@ -2,7 +2,7 @@ import os
 import tensorflow as tf
 import argparse
 import datetime
-from input_pipeline import tiny_imagenet_input_fn
+from input_pipeline.tiny_imagenet import input_fn
 from squeezenet import SqueezeNet
 
 tf.logging.set_verbosity(tf.logging.INFO)
@@ -128,15 +128,15 @@ logging_hook = tf.train.LoggingTensorHook(tensors=tensors_to_log,
                                           every_n_iter=50)
 
 train_spec = tf.estimator.TrainSpec(
-    input_fn=lambda: tiny_imagenet_input_fn(params=args,
-                                            mode=tf.estimator.ModeKeys.TRAIN),
+    input_fn=lambda: input_fn(params=args,
+                              mode=tf.estimator.ModeKeys.TRAIN),
     max_steps=steps)
 
 # Evaluation happens after a checkpoint is created.
 # See: https://www.tensorflow.org/guide/checkpoints#checkpointing_frequency
 eval_spec = tf.estimator.EvalSpec(
-    input_fn=lambda: tiny_imagenet_input_fn(params=args,
-                                            mode=tf.estimator.ModeKeys.EVAL),
+    input_fn=lambda: input_fn(params=args,
+                              mode=tf.estimator.ModeKeys.EVAL),
     steps=args['n_val_images'] // args['batch_size'],
     start_delay_secs=0,  # start evaluating every 60 seconds
     throttle_secs=0)

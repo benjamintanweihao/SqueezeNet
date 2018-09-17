@@ -4,7 +4,7 @@ from imutils import paths
 import tensorflow as tf
 
 
-def tiny_imagenet_input_fn(params, mode):
+def input_fn(params, mode):
 
     filenames, labels = load_filenames_labels(mode)
 
