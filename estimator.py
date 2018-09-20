@@ -1,52 +1,20 @@
 import os
 import tensorflow as tf
-import argparse
-import datetime
-
-from sklearn.model_selection import train_test_split
-
-from input_pipeline import caltech_256
+from dataset.tiny_imagenet import TinyImageNet
 from squeezenet import SqueezeNet
 
 tf.logging.set_verbosity(tf.logging.INFO)
 
 
-def str2bool(v):
-    if v.lower() in ('yes', 'true', 't', 'y', '1'):
-        return True
-    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
-        return False
-    else:
-        raise argparse.ArgumentTypeError('Boolean value expected.')
+DATASET = TinyImageNet
 
+X_train, X_val, y_train, y_val = DATASET.train_test_split()
 
-# ap = argparse.ArgumentParser(description='SqueezeNet')
-# ap.add_argument('--n_classes', help="Total number of classes", type=int, required=True)
-# ap.add_argument('--n_epochs', help="Total number of epochs", type=int, required=True)
-# ap.add_argument('--batch_size', help="Batch size", type=int, required=True)
-# ap.add_argument('--optimizer', help="Optimizer. One of: [rms|poly|sgd|adam]", default='sgd')
-# ap.add_argument('--lr', help="Learning rate", required=True, type=float)
-# ap.add_argument('--activation', help="Activation function to use [relu|elu]", default='relu')
-# ap.add_argument('--exp_name', help="Experiment name", required=True)
+print('X train = {}'.format(len(X_train)))
+print('X val = {}'.format(len(X_val)))
 
-# args = vars(ap.parse_args())
+PARAMS = DATASET.params(X_train, X_val)
 
-X, y = caltech_256.load_filenames_and_labels()
-X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2)
-
-assert len(X_train) == len(y_train)
-assert len(X_val) == len(y_val)
-
-args = {'input_shape': (224, 224, 3),
-        'n_classes': 256,
-        'n_epochs': 100,
-        'batch_size': 128,
-        'lr': 0.0005,
-        'optimizer': 'adam',
-        'activation': tf.nn.elu,
-        'n_images': len(X_train),
-        'n_val_images': len(X_val),
-        'exp_name': 'exp123'}
 
 def model_fn(features, labels, mode, params):
     assert params['n_classes'] > 0
@@ -130,7 +98,7 @@ def model_fn(features, labels, mode, params):
 
 
 # NOTE: steps = (no of ex / batch_size) * no_of_epochs
-steps = args['n_epochs'] * len(X_train) // args['batch_size']
+steps = PARAMS['n_epochs'] * len(X_train) // PARAMS['batch_size']
 assert steps > 0
 
 print('Steps: {}'.format(steps))
@@ -141,27 +109,29 @@ run_config = tf.estimator.RunConfig(save_checkpoints_steps=100)
 # exp_name = args['exp_name'].lower().replace(' ', '_') + timestamp
 
 
+
+
 estimator = tf.estimator.Estimator(
     model_fn=model_fn,
     model_dir=os.path.join(os.getcwd(), 'data', 'model'),
     # model_dir=os.path.join(os.getcwd(), 'data', 'model', exp_name),
-    params=args,
+    params=DATASET.params(X_train, X_val),
     config=run_config)
 
 
 train_spec = tf.estimator.TrainSpec(
-    input_fn=lambda: caltech_256.input_fn(X_train,
-                                          y_train,
-                                          params=args,
-                                          mode=tf.estimator.ModeKeys.TRAIN),
+    input_fn=lambda: DATASET.input_fn(X_train,
+                                      y_train,
+                                      params=DATASET.params(X_train, X_val),
+                                      mode=tf.estimator.ModeKeys.TRAIN),
     max_steps=steps)
 
 eval_spec = tf.estimator.EvalSpec(
-    input_fn=lambda: caltech_256.input_fn(X_val,
-                                          y_val,
-                                          params=args,
-                                          mode=tf.estimator.ModeKeys.EVAL),
-    steps=len(X_val) // args['batch_size'],
+    input_fn=lambda: DATASET.input_fn(X_val,
+                                      y_val,
+                                      params=DATASET.params(X_train, X_val),
+                                      mode=tf.estimator.ModeKeys.EVAL),
+    steps=len(X_val) // PARAMS['batch_size'],
     start_delay_secs=30,  # start evaluating every 30 seconds
     throttle_secs=0, hooks=[])
 

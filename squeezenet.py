@@ -28,29 +28,36 @@ def SqueezeNet(features, classes=None, training=True, activation=tf.nn.relu):
 
     x = fire_module(x, 64, 256, name='fire9', activation=activation)
 
-    x = keras.layers.Dropout(0.5 if training else 0.0)(x)
+    if training:
+        x = keras.layers.Dropout(0.5)(x)
 
     x = conv_2d(x, classes, 1, 1, activation, 'conv10')
 
     # NOTE: Had a lot of trouble with this all because MaxPool was set to 'same'
     # NOTE: instead of 'valid'.
-    x = tf.layers.average_pooling2d(x, pool_size=[13, 13], strides=[1, 1])
+    # x = tf.layers.average_pooling2d(x, pool_size=[13, 13], strides=[1, 1])
+    # logits = tf.layers.flatten(x)
+
+    # NOTE: This works better for smaller datasets?
+    x = keras.layers.GlobalAveragePooling2D()(x)
     logits = tf.layers.flatten(x)
 
     return logits
 
 
 def conv_2d(inputs, filters, kernel_size, strides, activation, name):
-    return keras.layers.Conv2D(filters=filters,
-                               kernel_size=[kernel_size, kernel_size],
-                               strides=[strides, strides],
-                               padding='same',
-                               kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(),
-                               # bias_initializer=tf.zeros_initializer(),
-                               kernel_regularizer=tf.contrib.layers.l2_regularizer(scale=0.0002),
-                               trainable=True,
-                               activation=activation,
-                               name=name)(inputs)
+    x = keras.layers.Conv2D(filters=filters,
+                            kernel_size=[kernel_size, kernel_size],
+                            strides=[strides, strides],
+                            padding='same',
+                            kernel_initializer=keras.initializers.he_normal(seed=4242),
+                            bias_initializer=keras.initializers.zeros(),
+                            kernel_regularizer=tf.contrib.layers.l2_regularizer(scale=0.0002),
+                            trainable=True,
+                            activation=activation,
+                            name=name)(inputs)
+
+    return keras.layers.BatchNormalization()(x)
 
 
 def fire_module(x, nb_squeeze_filters, nb_expand_filters, name, activation):
